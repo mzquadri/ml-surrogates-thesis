@@ -1,0 +1,24 @@
+# Training data, dataloaders, benchmark results, trained models (kept locally only)
+code/data/
+
+# Large binary data files
+*.npz
+*.npy
+*.pt
+*.pth
+*.ckpt
+*.h5
+
+# Training logs / experiment tracking
+logs/
+wandb/
+mlruns/
+
+# Python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# OS junk
+Thumbs.db
+.DS_Store
