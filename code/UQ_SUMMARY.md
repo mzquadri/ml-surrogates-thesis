@@ -39,13 +39,13 @@
 |---|---|---|---|
 | T5 | 0.3 | 0.4263 | — |
 | T6 | 0.3 | 0.4186 | — |
-| T7 | 0.3 | 0.4460 | — |
+| T7 | 0.3 | 0.4437 | — |
 | **T8** | **0.2** | **0.4820** | **1.369** |
 
 **T8 MC Dropout detailed stats (S=30, 100 test graphs):**
 - Spearman ρ = 0.4820 (uncertainty vs absolute error)
 - Mean σ = 1.369 veh/h | Std σ = 1.383 | Range: 0.042 – 44.29 veh/h
-- MC mean R² = 0.5857 (vs 0.5957 deterministic — negligible cost)
+- MC mean R² = 0.5856 (vs 0.5957 deterministic — small expected effect of stochastic averaging)
 - MC mean MAE = 3.948 veh/h
 - Inference time: 228 minutes (T4 GPU, S=30, 100 graphs)
 - Per-graph ρ: mean=0.464, std=0.023, range [0.41, 0.51]
@@ -57,8 +57,8 @@
 | 100% | 3.95 | — |
 | 90% | 3.23 | -18.3% |
 | 50% | 2.32 | **-41.2%** |
-| 25% | 1.79 | -54.6% |
-| 10% | 1.06 | -73.3% |
+| 25% | 1.79 | -54.5% |
+| 10% | 1.06 | -73.4% |
 
 **S-Convergence Analysis (source: s_convergence_with_rho.json, 10 graphs):**
 
@@ -77,7 +77,7 @@
 
 S=5→S=30: **+10.8% ρ gain** (most gain happens early). S=30→S=50: only **+1.03%** — S=30 is firmly on the plateau.
 
-**Key Finding:** MC Dropout σ is NOT a calibrated standard deviation. k₉₅ = 11.65 (ideal Gaussian = 1.96).
+**Key Finding:** MC Dropout σ is NOT a calibrated standard deviation. k₉₅ = 11.66 (ideal Gaussian = 1.96).
 
 **Charts:**
 - `fig2_uq_ranking.pdf` — Spearman ρ across all UQ methods
@@ -134,7 +134,9 @@ Normalises nonconformity score by MC Dropout σ → node-specific interval width
 
 ---
 
-### 3. TEMPERATURE SCALING (Post-Hoc Calibration)
+### 3. REGRESSION σ-SCALING / TEMPERATURE SCALING (Post-Hoc Calibration)
+
+> **Terminology:** the submitted thesis (Ch. 5.4) calls this method **"post-hoc regression σ-scaling"**; the saved JSON artefact is named `temperature_scaling_results.json`. Same method, two names.
 
 **What it is:** Single-parameter post-hoc recalibration. Learns scalar T on calibration set, scales all σ: σ_scaled = σ_raw × T. Minimises Kuleshov ECE (1σ coverage per percentile bin).
 
@@ -287,7 +289,7 @@ Multi-model ensemble is weaker than MC Dropout (ρ=0.4333 vs 0.4908). Averaging 
 | Spearman ρ | 0.4820 | 0.4797 | — | — |
 | PICP₉₀ | 90.02% | 86.90% | ≥ 85% | PASS |
 | PICP₉₅ | 95.01% | 90.01% | ≥ 90% | PASS |
-| **k₉₅** | 11.65 | **2.84** | (lower better) | **4× improvement** |
+| **k₉₅** | 11.66 | **2.84** | (lower better) | **4× improvement** |
 
 **Uncertainty Decomposition (from JSON):**
 
@@ -393,9 +395,9 @@ Multi-model ensemble is weaker than MC Dropout (ρ=0.4333 vs 0.4908). Averaging 
 | Metric | T7 | T8 |
 |---|---|---|
 | R² | 0.5471 | 0.5957 |
-| Spearman ρ | 0.4460 | 0.4820 |
+| Spearman ρ | 0.4437 | 0.4820 |
 | Selective pred (50% ret.) | −38.3% MAE | −41.2% MAE |
-| k₉₅ | 16.15 | 11.65 |
+| k₉₅ | 16.15 | 11.66 |
 | AUROC (top 10% errors) | **0.7416** | **0.7548** |
 
 Same qualitative conclusions hold across both trials.
@@ -406,14 +408,16 @@ Same qualitative conclusions hold across both trials.
 - `t7_vs_t8_uq_comparison.pdf` — T7 vs T8 UQ comparison
 - `t7_interval_width_comparison.pdf` — T7 interval widths
 
-### Stratified UQ by Road Feature Quartiles
+### Stratified UQ by |Δv| Quartile (submitted thesis §5.10)
 
-| Road Category | MAE (veh/h) | Spearman ρ |
+Rank-based quartiles of |Δv| (790,875 nodes each). Q1 = segments with zero policy effect (|Δv| = 0); Q4 = largest responses (up to ~230 veh/h).
+
+| Quartile | MAE (veh/h) | Spearman ρ |
 |---|---|---|
-| Low-volume, low-capacity | 1.0–1.4 | 0.74–0.81 |
-| High-traffic | 4.5–8.0 | 0.26–0.41 |
+| Q1 (smallest \|Δv\|, all zero-effect) | 1.24 | 0.721 |
+| Q4 (largest \|Δv\|) | 10.08 | **0.100** |
 
-Uncertainty-guided filtering is most effective for easy-to-predict majority of the network.
+The high Q1 ρ is partly mechanical (when y = 0, both |error| and σ depend on the model's small output magnitude); the Q4 degradation is real — **the uncertainty signal is weakest exactly where policy effects are largest.** This is the thesis's headline caveat for deployment.
 
 **Charts:**
 - `t8_stratified_uq.pdf` — Stratified UQ by road feature quartiles
@@ -426,9 +430,9 @@ Uncertainty-guided filtering is most effective for easy-to-predict majority of t
 
 | Method | R² | PICP₉₅ | k₉₅ | Spearman ρ | Gate | Result |
 |---|---|---|---|---|---|---|
-| T8 MSE Baseline | 0.5957 | 95.01% | 11.65 | 0.4820 | Locked | Baseline |
-| T8 + MC Dropout | 0.5857 | — | 11.65 | 0.4820 | — | Primary UQ |
-| T8 + Temp Scaling | 0.5857 | ~85.0% | 4.04 | 0.4820 | — | Post-hoc calib |
+| T8 MSE Baseline | 0.5957 | 95.01% | 11.66 | 0.4820 | Locked | Baseline |
+| T8 + MC Dropout | 0.5856 | — | 11.66 | 0.4820 | — | Primary UQ |
+| T8 + σ-Scaling (T=2.887) | 0.5856 | — | 4.04 | 0.4820 | — | Post-hoc calib (ECE −90.5%) |
 | T8 + Std Conformal | 0.5957 | **95.01%** | — | — | — | Coverage guaranteed |
 | T8 + Adaptive Conformal | 0.5957 | [83.7–96.4%] | — | — | — | Best conditional coverage |
 | Ensemble (5 runs avg) | 0.5865 | — | — | **0.4908** | — | Marginal gain |
@@ -513,46 +517,27 @@ Unfreezing the backbone lets pinball/NLL gradients reshape MSE-trained represent
 
 ---
 
-## FIGURES DIRECTORY (document/figures/)
+## FIGURES DIRECTORY (document/figures/new/)
 
-### T8 Post-Hoc UQ Figures
+The figures shipped with the submitted thesis (PDF + PNG pairs in `document/figures/new/`):
+
 | File | Content |
 |---|---|
-| `fig1_trial_comparison.pdf` | R², MAE, RMSE across T2–T8 |
-| `fig2_uq_ranking.pdf` | Spearman ρ bar chart all methods |
-| `fig6_with_without_uq.pdf` | Deterministic vs MC Dropout accuracy |
-| `fig7_calibration.pdf` | k₉₅ bar chart: T8 vs ideal Gaussian |
-| `fig9_policy_explanation.pdf` | Uncertainty-guided decision workflow |
-| `fig14_conformal_workflow.pdf` | Split conformal workflow |
-| `fig3_conformal_coverage.pdf` | Nominal vs achieved coverage |
-| `t8_calibration_curve.pdf` | Calibration curve (all levels) |
-| `t8_interval_width_comparison.pdf` | Interval widths comparison |
-| `t8_conformal_conditional.pdf` | Conditional coverage by decile |
-| `t8_selective_prediction_curve.pdf` | MAE vs retention fraction |
-| `t8_reliability_diagram.pdf` | Expected vs observed Gaussian coverage |
-| `t8_temperature_scaling.pdf` | Before/after temperature scaling |
-| `t8_pit_histogram.pdf` | PIT histogram (raw σ) |
-| `t8_pit_after_tempscaling.pdf` | PIT before vs after T=2.887 |
-| `t8_s_convergence.pdf` | S-convergence of ρ and mean σ |
-| `t8_stratified_uq.pdf` | Stratified UQ by road features |
-| `t8_per_graph_variation.pdf` | Per-graph ρ distribution |
-| `t8_error_detection_auroc.pdf` | AUROC for error detection |
+| `fig00_all_models_summary.pdf` | Master summary: R² ranking, accuracy/UQ trade-off, k₉₅ across all 12 models |
+| `fig07_selective_prediction_curve.pdf` | MAE vs retention fraction (50%/90% annotated) |
+| `fig12_sigma_scaling_ece.pdf` | ECE vs scaling factor T; optimum T* = 2.887 |
+| `fig13_conformal_coverage_nominal_vs_achieved.pdf` | Nominal vs achieved coverage |
+| `fig15_conditional_coverage_by_decile.pdf` | Conditional coverage by σ decile (standard vs adaptive) |
+| `fig19_t9_uncertainty_decomposition.pdf` | T9 aleatoric vs epistemic decomposition |
+| `fig22_cqr_r2_progression.pdf` | R² progression T8 → T10 → T11 |
+| `fig26_deep_ensemble_member_r2.pdf` | Deep Ensemble mean exceeds every member |
+| `fig28_stratified_uq_quartiles.pdf` | Stratified UQ by \|Δv\| quartile (MAE ↑, ρ ↓) |
+| `fig29_pointnet_architecture.pdf` | PointNetTransfGAT architecture diagram |
+| `fig31_network_intro.pdf` | Paris network introduction figure |
+| `fig34_feature_distributions.pdf` | Input feature distributions |
+| `fig35_policy_decision_framework.pdf` | Three-tier accept/review/reject decision framework |
 
-### T9 Heteroscedastic Figures (Generated)
-| File | Content |
-|---|---|
-| `t9v2_point_metrics.pdf` | R², MAE vs T8 with gate line |
-| `t9v2_uncertainty_decomposition.pdf` | Aleatoric vs epistemic vs total |
-| `t9v2_k95_comparison.pdf` | k₉₅: T8 vs T9 vs ideal Gaussian |
-| `t9v2_error_vs_sigma.pdf` | |error| vs σ_tot Spearman correlation |
-| `t9v2_calibration.pdf` | Coverage reliability diagram |
-
-### T10/T11 CQR Figures (Generated)
-| File | Content |
-|---|---|
-| `t10v2_scatter.pdf` | R² progression T8→T10-v1→T10-v2→T11 |
-| `t10v2_coverage_bars.pdf` | PICP₉₀/₉₅ for T10-v1, T10-v2, T11 |
-| `t10v2_interval_widths.pdf` | Interval widths across all variants |
+*(Generation scripts: `generate_thesis_figures.py` and `scripts/misc/gen_batch*.py`.)*
 
 ---
 
