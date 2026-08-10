@@ -1,127 +1,154 @@
 # Uncertainty Quantification for Machine Learning Models in Transportation Policy Analysis
 
-**Master's Thesis** | Technical University of Munich | School of Computation, Information and Technology
+Master's thesis, Technical University of Munich
 
-|                |                                                                      |
-| -------------- | -------------------------------------------------------------------- |
-| **Author**     | Mohd Zamin Quadri                                                    |
-| **Programme**  | M.Sc. Mathematics in Science and Engineering                         |
-| **Department** | Computer Science (Data Analytics and Machine Learning)               |
-| **Examiner**   | Prof. Dr. Stephan Günnemann                                          |
-| **Supervisors**| Dominik Fuchsgruber, M.Sc., Elena Natterer, M.Sc.                    |
-| **Submitted**  | May 15, 2026                                                         |
+| | |
+|---|---|
+| Author | Mohd Zamin Quadri |
+| Degree | M.Sc. Mathematics in Science and Engineering |
+| Department | Computer Science (Data Analytics and Machine Learning), School of CIT |
+| Examiner | Prof. Dr. Stephan Gunnemann |
+| Supervisors | Dominik Fuchsgruber, Elena Natterer |
+| Submitted | May 15, 2026 |
 
-**[Read the thesis (PDF)](document/main.pdf)**
-
----
-
-## Abstract
-
-Agent-based simulators such as MATSim are the standard tool for evaluating urban transport policy but take hours per Paris-scale scenario; Graph Neural Network (GNN) surrogates close that gap to seconds. Accuracy alone is not enough for decision support, however, because predictions can degrade outside the training distribution without any external signal.
-
-This thesis evaluates uncertainty quantification (UQ) for a PointNetTransfGAT GNN traffic surrogate on the Paris road network (31,635 road segments), using a fixed **1,000-scenario subset** of the 10,000-scenario MATSim corpus of Natterer et al. (2025), reused across all eleven trials. It combines post-hoc methods — MC Dropout, regression σ-scaling, split/adaptive conformal prediction, selective prediction, error detection — with three uncertainty-aware training extensions (heteroscedastic and CQR heads) to study when per-prediction uncertainty can be trusted for policy support.
+The submitted thesis is [`document/main.pdf`](document/main.pdf). The full LaTeX source is in [`document/`](document/).
 
 ---
 
-## Key Results (as submitted, May 2026)
+## What this thesis is about
 
-All values recomputed from the saved per-trial prediction arrays; see `audit_summary.md` (10 methods audited, 0 bugs) and `code/UQ_SUMMARY.md` (49 numbers cross-verified against canonical JSON artefacts).
+City planners rely on large-scale traffic simulators such as MATSim to test policies before
+anyone pours concrete. The problem is speed: a single simulation of a city like Paris can take
+hours, so exploring thousands of "what if" questions is painful. A machine learning surrogate
+that predicts simulation outcomes in milliseconds would change that, but only if planners know
+when they can trust it. A surrogate that is confidently wrong is worse than no surrogate at all.
 
-**Base model — Trial 8 (PointNetTransfGAT, dropout 0.2, 100 test graphs, 3,163,500 nodes):**
+That is the gap this thesis works on. I took an existing corpus of 10,000 MATSim simulations of
+Paris, trained a graph neural network to predict how policy scenarios change traffic speeds on
+every road segment, and then spent most of the thesis answering the harder question: can the
+model's uncertainty estimates be trusted, and can they be repaired when they cannot?
 
-| Metric | Value |
-| ------ | ----- |
-| R² | **0.5957** |
-| MAE | **3.957 veh/h** |
-| RMSE | **7.118 veh/h** |
+All experiments use a fixed, held-out subset of 1,000 scenarios (10 percent of the corpus,
+covering Paris's 31,635 road segments) so that every method is compared on exactly the same
+ground. The final test set is 100 scenarios, 3,163,500 road links, that no method ever trained on.
 
-**Post-hoc UQ on T8:**
+![From simulation to calibrated policy decisions](docs/diagrams/pipeline.svg)
 
-| Analysis | Result |
-| -------- | ------ |
-| MC Dropout (S=30) Spearman ρ (σ vs \|error\|) | **0.4820** pooled; per-graph mean 0.464, 95% CI [0.460, 0.469] |
-| Raw interval calibration | k₉₅ = **11.66** vs Gaussian 1.96 (severely overconfident) |
-| Regression σ-scaling (T\* = 2.887) | ECE 0.356 → **0.034** (−90.5%); 1σ coverage 32.7% → 68.0%; k₉₅ → 4.04 |
-| Split conformal (scenario-level, seed 42) | PICP₉₀ = **90.02%** (q₉₀ = 9.920); PICP₉₅ = **95.01%** (q₉₅ = 14.677) |
-| Adaptive conformal (σ-normalised, q = 7.71) | Conditional coverage across σ-deciles: [59.0%, 98.1%] → **[83.7%, 96.4%]** |
-| Selective prediction (50% most confident retained) | MAE −**41.2%** → 2.32 veh/h (25%: −54.5%; 10%: −73.4%) |
-| Error detection AUROC | **0.7548** (top-10% errors), 0.7324 (top-20%) |
+## The surrogate model
 
-**Uncertainty-aware training extensions (isolate backbone trainability):**
+The surrogate is PointNetTransfGAT, a graph neural network that treats the road network as a
+graph: one node per road segment, edges where segments connect. A PointNet-style encoder lifts
+raw segment attributes into an embedding, a transformer encoder shares context across the whole
+network, and graph attention layers aggregate information from neighbouring roads. The model
+outputs a predicted speed change for every link.
 
-| Trial | Design | R² | Gates | Verdict |
-| ----- | ------ | -- | ----- | ------- |
-| T9 | Heteroscedastic head, frozen backbone | 0.4991 | 2/3 pass (R² ≥ 0.55 fails) | Partial — k₉₅ improves 4× to 2.84; 99.85% aleatoric-dominated |
-| T10 | CQR head, **unfrozen** backbone | 0.4057 | 3/6 fail | **Negative** — pinball gradients destroy MSE representations |
-| T11 | CQR head, **frozen** backbone | 0.5835 | **6/6 pass** | **Positive** — MAE 4.302 veh/h; single deterministic pass |
+For uncertainty I used MC Dropout: dropout stays active at inference time, and 30 stochastic
+forward passes produce both a predictive mean and a standard deviation for each link. The hope is
+that links where the model disagrees with itself are exactly the links where it is wrong.
 
-**Ensembles & baselines:**
+![PointNetTransfGAT architecture](docs/diagrams/architecture.svg)
 
-| Model | R² | Spearman ρ |
-| ----- | -- | ---------- |
-| Deep Ensemble (5 members, seeds {42,137,256,389,512}) | **0.6841** (+14.8% vs T8) | 0.3997 |
-| XGBoost (tabular baseline) | 0.7414 | — |
-| Random Forest (tabular baseline) | 0.6612 | — |
-| MLP (tabular baseline) | 0.4928 | — |
-| Multi-model ensemble (T2/T5/T6/T7/T8, R²-weighted) | 0.5656 | 0.4333 |
+## What the results show
 
-**Key caveats reported in the thesis:**
+The GNN surrogate (Trial 8) reaches R-squared 0.596 on the held-out test set, with a mean
+absolute error of 3.96 veh/h. It does not beat XGBoost on raw accuracy (0.741), and the thesis
+says so plainly. What the GNN offers instead is per-link uncertainty that a gradient-boosted
+trees baseline does not provide, and a deep ensemble of five GNNs closes much of the accuracy
+gap (0.684) at roughly five times the compute.
 
-- Stratified by |Δv| quartile, MC Dropout ranking falls from ρ = 0.721 (Q1, zero-effect segments) to **ρ = 0.100 (Q4)**, while MAE rises 1.24 → 10.08 veh/h — the uncertainty signal is weakest exactly where policy effects are largest.
-- 88.7% of test nodes have Δv = 0, which flattens AUROC and selective-prediction metrics.
-- Tree baselines beat the GNN on point accuracy; the thesis contribution is the per-prediction UQ pipeline, which default tree models do not provide.
-- Cross-replication on Trial 7 (dropout 0.3): ρ = 0.4437, k₉₅ = 16.15, AUROC = 0.7416 — qualitatively unchanged.
+![Test R-squared across models](docs/diagrams/results_overview.svg)
 
----
+### The raw uncertainty is miscalibrated, and one fitted constant repairs most of it
 
-## Repository Structure
+Left alone, the MC Dropout intervals are far too narrow: a nominal 1-sigma band covers only
+32.7 percent of errors instead of the expected 68.3 percent, and the expected calibration error
+is 0.356. Fitting a single scalar (sigma-scaling, T* = 2.887) on a validation split cuts the
+calibration error by 90.5 percent and brings 1-sigma coverage to 68.0 percent.
+
+![Calibration before and after sigma-scaling](docs/diagrams/calibration.svg)
+
+### Conformal prediction keeps its promise
+
+Split conformal prediction wraps the model in intervals with a distribution-free coverage
+guarantee, without retraining anything. On the test set the 90 percent intervals cover 90.02
+percent and the 95 percent intervals cover 95.01 percent. The adaptive variant matters more in
+practice: it tightens worst-case conditional coverage across difficulty deciles from a worrying
+[59.0, 98.1] to [83.7, 96.4], so the guarantee degrades much more gracefully on hard scenarios.
+
+![Conformal coverage, nominal vs achieved](docs/diagrams/conformal_coverage.svg)
+
+### Uncertainty is useful for triage
+
+The most practical result: if the model only answers on the links where it is most confident,
+accuracy improves sharply. Keeping the most confident half of links cuts the error by 41
+percent; keeping the most confident 10 percent cuts it by 73 percent. This is what makes the
+accept / review / reject workflow in the thesis viable: confident predictions flow through,
+uncertain ones get routed back to the full simulator.
+
+![Selective prediction curve](docs/diagrams/selective_prediction.svg)
+
+## What did not work
+
+The thesis reports failures alongside successes, because they are just as informative.
+
+- **Heteroscedastic regression (Trial 9)** was meant to learn input-dependent noise directly.
+  It failed the pre-registered accuracy gate (R-squared 0.499) and 99.85 percent of its
+  predictive variance collapsed into the aleatoric term, so the epistemic signal was lost.
+- **Conformalized quantile regression with an unfrozen backbone (Trial 10)** dropped accuracy to
+  R-squared 0.406 and failed three of six acceptance gates. Freezing the backbone (Trial 11)
+  recovered accuracy to 0.583 and passed all gates, but added nothing over split conformal.
+- **Uncertainty quality collapses where it matters most.** On the calmest quartile of links the
+  error-uncertainty correlation is a healthy 0.721; on the quartile with the largest speed
+  changes it falls to 0.100, while the error grows eightfold. Since 88.7 percent of test links
+  have no speed change at all, headline metrics flatter the model. The thesis states this
+  limitation explicitly rather than hiding it.
+
+![Stratified uncertainty quality](docs/diagrams/stratified_uq.svg)
+
+## Repository layout
 
 ```
-document/                    Thesis document (submitted version)
-  main.tex, settings.tex     LaTeX root + metadata
-  chapters/                  Chapters 01-07 + appendix (master table)
-  pages/                     Cover, title, abstracts (EN/DE), acknowledgments
-  figures/new/               All thesis figures (PDF + PNG)
-  main.pdf                   Compiled thesis (submitted May 15, 2026)
-  Zamin_Quadri_Master_Thesis.docx
-code/
-  scripts/gnn/               GNN architectures (PointNetTransfGAT, frozen heteroscedastic/CQR variants), losses
-  scripts/training/          Training pipelines (base trials, deep ensemble, heteroscedastic, CQR)
-  scripts/data_preprocessing/ MATSim -> PyG graph conversion
-  scripts/misc/              Figure generation, batch analyses, verification
-  colab_*.ipynb              Colab notebooks (UQ master, σ-scaling, ensembles, RF baseline)
-  docs/                      Script-level documentation (preprocessing, GNN, training)
-  UQ_SUMMARY.md              Full verified results summary (49 cross-checked numbers)
-audit_summary.md             Independent UQ implementation audit (10 methods, 0 bugs)
-THESIS_FIX_PLAN.md           Pre-submission revision plan (80 issues, all applied)
-THESIS_REVIEW_NOTES.md       Section-by-section review + defence Q&A prep
-thesis_overleaf.zip          Overleaf source archive
+document/               The thesis itself
+  main.pdf              Submitted version (May 15, 2026)
+  main.tex, chapters/   LaTeX source, chapters 1-7 plus appendix
+  pages/, figures/      Front matter and all thesis figures
+  bibliography.bib
+code/                   Everything needed to reproduce the analysis
+  scripts/              data_preprocessing, gnn (models, losses), training, misc
+  colab_*.ipynb         UQ master, verification, ensemble, scaling, RF baseline
+  docs/                 Notes on preprocessing, the GNN, and training
+  UQ_SUMMARY.md         Verified results summary (numbers cross-checked)
+  environment-minimal.yml, traffic-gnn.yml
+docs/diagrams/          SVG diagrams used in this README
 ```
 
-> **Data note:** Training data (~4.8 GB), dataloaders, benchmark artefacts, and trained model
-> checkpoints are **not** included in this repository (kept locally; GitHub size/LFS limits).
-> All code, notebooks, figures, and the full thesis document are included.
+## Data and model weights
 
-## Compiling the Thesis
+The training data (about 4.8 GB of preprocessed graph batches) and the trained checkpoints
+(about 6 GB) are not committed; they live locally. The underlying simulation corpus is by
+Natterer et al. (2025), Transportation Research Part C 180:105360, and is not mine to
+redistribute. Every headline number in this README was recomputed from the saved prediction
+arrays during a pre-submission audit of all ten UQ methods, which found zero bugs.
 
-```bash
-cd document
-pdflatex main.tex && biber main && pdflatex main.tex && pdflatex main.tex
-```
-
-## Environment
+## Reproducing the analysis
 
 ```bash
 conda env create -f code/environment-minimal.yml
 conda activate traffic-gnn
 ```
 
-## Builds On
+The notebooks under `code/` are the intended entry points: `colab_uq_master.ipynb` runs the
+full UQ pipeline for the trained model, `colab_uq_verification.ipynb` recomputes the reported
+metrics, and `colab_deep_ensemble_training.ipynb` and `colab_temperature_scaling.ipynb` cover
+the ensemble and the calibration fit. Building the thesis PDF requires a LaTeX distribution;
+`latexmk -pdf document/main.tex` is enough.
 
-> Natterer et al. (2025). *Machine Learning Surrogates for Agent-Based Models in Transportation Policy Analysis.* Transportation Research Part C, 180, 105360.
+## Citation
 
-This thesis reuses that work's MATSim simulation corpus and preprocessing pipeline, and contributes the UQ evaluation framework, calibration analysis, uncertainty-aware training extensions, and cross-replication study.
+```
+Quadri, Mohd Zamin (2026). Uncertainty Quantification for Machine Learning Models
+in Transportation Policy Analysis. Master's thesis, Technical University of Munich.
+```
 
-## License
-
-Submitted as a Master's thesis at the Technical University of Munich. Contact the author for reuse permissions.
+Supervised at the Professorship of Data Analytics and Machine Learning (Prof. Dr. Stephan
+Gunnemann), Department of Computer Science, School of Computation, Information and Technology.

@@ -49,7 +49,7 @@ UQ_SUMMARY.md          Verified results summary (49 numbers cross-checked vs JSO
 
 > Training data (~4.8 GB of PyG batches) and model checkpoints are **not** committed (kept locally).
 > All headline results were recomputed from the saved `.npz` prediction arrays and canonical
-> JSON metric files during the pre-submission audit (see `../audit_summary.md`).
+> JSON metric files during a pre-submission audit of every UQ method (10 methods audited, 0 bugs).
 
 ## Setup
 
