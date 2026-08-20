@@ -1,5 +1,10 @@
 # Training data, dataloaders, benchmark results, trained models (kept locally only)
 code/data/
+data/
+models/
+results/
+private_artifacts/
+policy-dashboard/
 
 # Large binary data files
 *.npz
@@ -15,9 +20,13 @@ wandb/
 mlruns/
 
 # Python
+.venv/
 __pycache__/
 *.pyc
 .ipynb_checkpoints/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
 
 # OS junk
 Thumbs.db

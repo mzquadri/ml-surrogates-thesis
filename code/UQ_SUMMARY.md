@@ -1,4 +1,9 @@
 # UQ Summary — Uncertainty Quantification for ML Models in Transportation Policy Analysis
+> **Submission-era record.** This file is preserved to document the analysis as submitted.
+> Post-submission corrections and protocol boundaries are authoritative in
+> [`../docs/CORRIGENDUM.md`](../docs/CORRIGENDUM.md) and
+> [`../analysis_outputs/THESIS_INTELLIGENCE_REPORT.md`](../analysis_outputs/THESIS_INTELLIGENCE_REPORT.md).
+
 **Thesis:** Uncertainty Quantification for Machine Learning Models in Transportation Policy Analysis
 **Author:** Mohd Zamin Quadri | TUM Master's Thesis
 **Dataset:** 1,000 of 10,000 MATSim scenarios (Paris road network, 10% subset)
@@ -87,9 +92,9 @@ S=5→S=30: **+10.8% ρ gain** (most gain happens early). S=30→S=50: only **+1
 
 ---
 
-### 2. CONFORMAL PREDICTION (Post-Hoc, Coverage-Guaranteed)
+### 2. CONFORMAL PREDICTION (Post-Hoc, Marginal Coverage)
 
-**What it is:** Distribution-free method that wraps any model to give guaranteed prediction intervals. Nonconformity score = |y - ŷ|. Uses 50 calibration graphs to find quantile q, applies ŷ ± q to 50 evaluation graphs.
+**What it is:** A distribution-free method under exchangeability assumptions that targets marginal prediction-interval coverage. Nonconformity score = |y - ŷ|. Uses 50 calibration graphs to find quantile q, applies ŷ ± q to 50 evaluation graphs.
 
 **Applied to:** T8 (primary), T7 (cross-check)
 
@@ -112,7 +117,7 @@ S=5→S=30: **+10.8% ρ gain** (most gain happens early). S=30→S=50: only **+1
 | 90% | 48.6% | **7.737** | 90.2% | 90.1% |
 | 95% | 54.9% | **11.66** | 95.1% | 95.0% |
 
-**Key Finding:** Raw MC Dropout severely undercovers at every level (54.9% at 95% nominal). Conformal prediction achieves exact coverage by construction.
+**Key Finding:** Raw MC Dropout severely undercovers at every level (54.9% at 95% nominal). Conformal prediction achieved near-nominal empirical marginal coverage on this evaluated split; it does not guarantee conditional or per-scenario coverage.
 
 #### 2b. Conditional Coverage Analysis (Deciles by σ)
 
@@ -152,7 +157,7 @@ Normalises nonconformity score by MC Dropout σ → node-specific interval width
 | 3σ coverage | 69.1% | 91.6% (expected 99.7%) |
 | k₉₅ | 11.66 | **4.04** |
 
-**Key Finding:** Temperature scaling reduces ECE by 90.5% and achieves near-perfect 1σ calibration (68.0% vs 68.3% target). However, 2σ and 3σ coverage remains below theoretical Gaussian targets — residual miscalibration persists because scaling only optimises 1σ. Cannot replace conformal prediction for formal guarantees.
+**Key Finding:** Temperature scaling reduces ECE by 90.5% and achieves near-perfect 1σ calibration (68.0% vs 68.3% target). However, 2σ and 3σ coverage remains below theoretical Gaussian targets — residual miscalibration persists because scaling only optimises 1σ. It cannot replace conformal prediction for empirical marginal coverage under the stated exchangeability assumptions.
 
 **Note on earlier hardcoded values:** Prior summaries cited T=2.70, ECE 0.269→0.048 — these were from an earlier unrecorded run with a different split. The values above are the verified numbers from the saved JSON.
 
@@ -379,7 +384,7 @@ Multi-model ensemble is weaker than MC Dropout (ρ=0.4333 vs 0.4908). Averaging 
 
 **All 6 Gates: PASS** → Positive Result ✓
 
-**Key finding:** Freezing the backbone is the critical design decision. R² drops by only 1.2% from T8 (0.5957 → 0.5835) while providing native asymmetric prediction intervals with coverage guarantees.
+**Key finding:** Freezing the backbone is the critical design decision. R² drops by only 1.2% from T8 (0.5957 → 0.5835) while providing native asymmetric prediction intervals with empirical marginal coverage under the stated split assumptions.
 
 **Charts:**
 - `t10v2_scatter.pdf` — R² progression across T8, T10-v1, T10-v2, T11
@@ -433,7 +438,7 @@ The high Q1 ρ is partly mechanical (when y = 0, both |error| and σ depend on t
 | T8 MSE Baseline | 0.5957 | 95.01% | 11.66 | 0.4820 | Locked | Baseline |
 | T8 + MC Dropout | 0.5856 | — | 11.66 | 0.4820 | — | Primary UQ |
 | T8 + σ-Scaling (T=2.887) | 0.5856 | — | 4.04 | 0.4820 | — | Post-hoc calib (ECE −90.5%) |
-| T8 + Std Conformal | 0.5957 | **95.01%** | — | — | — | Coverage guaranteed |
+| T8 + Std Conformal | 0.5957 | **95.01%** | — | — | — | Near-nominal marginal coverage |
 | T8 + Adaptive Conformal | 0.5957 | [83.7–96.4%] | — | — | — | Best conditional coverage |
 | Ensemble (5 runs avg) | 0.5865 | — | — | **0.4908** | — | Marginal gain |
 | Multi-model Ensemble | 0.5656 | — | — | 0.4333 | — | Weaker UQ |
@@ -548,7 +553,7 @@ The figures shipped with the submitted thesis (PDF + PNG pairs in `document/figu
 | `code/data/TR-C_Benchmarks/.../t9_evaluation_results.json` | T9 ground truth metrics |
 | `code/data/TR-C_Benchmarks/.../10th.../cqr_metrics.json` | T10 ground truth metrics |
 | `code/data/TR-C_Benchmarks/.../11th.../cqr_metrics.json` | T11 ground truth metrics |
-| `code/audit/AUDIT_REPORT_V2.md` | Full audit report with gate checks |
+| `../analysis_outputs/THESIS_INTELLIGENCE_REPORT.md` | Post-submission aggregate audit and limitations |
 
 ---
 

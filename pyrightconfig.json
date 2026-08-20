@@ -1,0 +1,10 @@
+{
+  "include": [
+    "thesis_dashboard",
+    "scripts/analysis",
+    "scripts/check_repository.py",
+    "tests"
+  ],
+  "pythonVersion": "3.10",
+  "typeCheckingMode": "standard"
+}

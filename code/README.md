@@ -2,7 +2,10 @@
 
 Code and experiments for the Master's thesis **"Uncertainty Quantification for Machine Learning Models in Transportation Policy Analysis"** (TUM, submitted May 15, 2026, author: Mohd Zamin Quadri).
 
-The full thesis document (LaTeX + compiled PDF) lives in [`../document/`](../document/). A complete, cross-verified results summary lives in [`UQ_SUMMARY.md`](UQ_SUMMARY.md).
+The immutable submitted thesis (LaTeX + compiled PDF) lives in [`../document/`](../document/).
+`UQ_SUMMARY.md` is a submission-era summary. The post-submission source of record is
+[`../docs/CORRIGENDUM.md`](../docs/CORRIGENDUM.md) with its safe aggregate evidence in
+[`../analysis_outputs/`](../analysis_outputs/).
 
 ---
 
@@ -42,14 +45,14 @@ scripts/
   misc/                Figure generation (gen_batch*.py), consistency checks
 colab_*.ipynb          UQ master notebook, σ-scaling, ensembles, RF baseline
 generate_thesis_figures.py
-environment.yml / environment-minimal.yml
+  environment-minimal.yml / traffic-gnn.yml
 docs/                  Script-level docs: data_preprocessing.md, gnn.md, training.md
-UQ_SUMMARY.md          Verified results summary (49 numbers cross-checked vs JSON artefacts)
+UQ_SUMMARY.md          Submission-era results summary with a corrigendum banner
 ```
 
-> Training data (~4.8 GB of PyG batches) and model checkpoints are **not** committed (kept locally).
-> All headline results were recomputed from the saved `.npz` prediction arrays and canonical
-> JSON metric files during a pre-submission audit of every UQ method (10 methods audited, 0 bugs).
+> Training data, model checkpoints, and row-level prediction arrays are **not** committed.
+> A post-submission full-array audit produced the aggregate evidence in `../analysis_outputs/`
+> and identified the corrections and replay limitations in `../docs/CORRIGENDUM.md`.
 
 ## Setup
 
