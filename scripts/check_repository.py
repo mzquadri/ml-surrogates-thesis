@@ -24,21 +24,21 @@ REPO = Path(__file__).resolve().parent.parent
 SUBMITTED_PDF = REPO / "document/main.pdf"
 ANALYSIS_ROOT = REPO / "analysis_outputs"
 
-ANALYSIS_OUTPUT_SHA256 = {
-    "THESIS_INTELLIGENCE_REPORT.md": "c59b7c7c7a9179fdcdcd5a2b880dcf2062b9f9c83a7b08a13c6e1b44af5398e8",
-    "artifact_manifest.csv": "68368fc523766ac78b3599deaf0f233712a234eb4dae8fa741941ec3ec50cd59",
-    "figures/conditional_coverage_by_uncertainty.png": "6aac4e8944f368efeeb501777e74101354307cb2d5c2eed1511506c0335b2bd4",
-    "figures/conditional_coverage_by_uncertainty.svg": "498ccf6b124bed4bbc6f1026c42604ab10f520af07c5b34d3992b5d206b0bba1",
-    "figures/model_r2_comparison.png": "b410b1aaf582ca58460de4b3ad574e9ab325fab97fcb9bb4f5e539793665f653",
-    "figures/model_r2_comparison.svg": "32543f566f9e8900ca82f302f323adac883eaba900c38825045d8858f7d8d1b5",
-    "figures/selective_risk_comparison.png": "aa3ba233904c075eadf0c3c68bdf98ed1167eb70e3f80cd92e4f02cd5efbbbc8",
-    "figures/selective_risk_comparison.svg": "ba575f469dbddae1ad2e1ee88c0fac4ef842ba38356b05119e163225f95d9822",
-    "figures/temperature_reliability_graph20_80.png": "824120fac2f8d21108de18fcff2ab8197d6ea7ec065acbdca636277969aadeb2",
-    "figures/temperature_reliability_graph20_80.svg": "7c46c9e3525cfe0c18efc73939e42ea84c02bbea6d85eaefd8a8447990192ad3",
-    "figures/uncertainty_error_relationship.png": "8f56efee2ac3a13d86c920b8012a92232b86284d0e424c76ff9ae007740eb7e1",
-    "figures/uncertainty_error_relationship.svg": "754a4dfceeecc651c9ea79a5950e4dca91ac6b2c3acf1d05e7af3432fb97bfd7",
-    "model_comparison.csv": "af923cf16e9e5c071f9b357d7a946c8ad232f74f3646f19fba8da762cd6cac00",
-    "thesis_intelligence.json": "5b5a8b0df4d66a45f8f9958ffb9a8e094932c4e6c34e1ecf5e9f0bb86b8c68ec",
+ANALYSIS_OUTPUT_GIT_BLOBS = {
+    "THESIS_INTELLIGENCE_REPORT.md": "7a6af4b26f660c2b4b191c635fb0a8d5bf771d62",
+    "artifact_manifest.csv": "5997b39a543b8c465801032a01d27a4b5ea8f8e4",
+    "figures/conditional_coverage_by_uncertainty.png": "4b55cbe5db18a8d1d04829b32be39b4c25dde415",
+    "figures/conditional_coverage_by_uncertainty.svg": "5b4ac552de975c4c5b534a6060934916f34d13e0",
+    "figures/model_r2_comparison.png": "5dbf9a3d7bf753a55f11969e012e06aed2a414e8",
+    "figures/model_r2_comparison.svg": "fd7ddf8981b23f4e1da56300bae1630a89c6dd46",
+    "figures/selective_risk_comparison.png": "f303a5d230fda97abf94084c69563161c0fbb64c",
+    "figures/selective_risk_comparison.svg": "5e78510543733f6514e0e6ab47275686240233a4",
+    "figures/temperature_reliability_graph20_80.png": "a9f02d3568e9387860a4bbadb09e6b2565214238",
+    "figures/temperature_reliability_graph20_80.svg": "67596a56c9cca46e6030a0c98cc98a5fc5fdbd20",
+    "figures/uncertainty_error_relationship.png": "c86f2bf5423c6767ca4cecaa6311e721d606193c",
+    "figures/uncertainty_error_relationship.svg": "681a66cd289df15f9af4da1039536ac2fe587b67",
+    "model_comparison.csv": "ba34b2f46dd291467f66c6629f4c4400357a6dfb",
+    "thesis_intelligence.json": "79b8ee43473a923fa6b867677b7d2e61272ad4f6",
 }
 
 LOCAL_PATH_PATTERN = re.compile(
@@ -162,21 +162,36 @@ def validate_analysis_outputs() -> None:
         for path in ANALYSIS_ROOT.rglob("*")
         if path.is_file()
     }
-    expected = set(ANALYSIS_OUTPUT_SHA256)
+    expected = set(ANALYSIS_OUTPUT_GIT_BLOBS)
     if actual != expected:
         raise SystemExit(
             "Aggregate output inventory changed: "
             f"missing={sorted(expected - actual)}, unexpected={sorted(actual - expected)}"
         )
 
-    for relative_path, expected_digest in ANALYSIS_OUTPUT_SHA256.items():
+    for relative_path, expected_blob in ANALYSIS_OUTPUT_GIT_BLOBS.items():
         path = ANALYSIS_ROOT / relative_path
-        if sha256(path) != expected_digest:
-            raise SystemExit(f"Aggregate output hash changed: {relative_path}")
+        actual_blob = subprocess.run(
+            ["git", "rev-parse", f"HEAD:analysis_outputs/{relative_path}"],
+            cwd=REPO,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        if actual_blob != expected_blob:
+            raise SystemExit(f"Aggregate output Git blob changed: {relative_path}")
         if path.suffix.lower() in {".csv", ".json", ".md", ".svg"}:
             text = path.read_text(encoding="utf-8")
             if LOCAL_PATH_PATTERN.search(text) or "MohdZaminQuadri" in text:
                 raise SystemExit(f"Aggregate output contains a local path: {relative_path}")
+
+    aggregate_diff = subprocess.run(
+        ["git", "diff", "--quiet", "HEAD", "--", "analysis_outputs"],
+        cwd=REPO,
+        check=False,
+    )
+    if aggregate_diff.returncode != 0:
+        raise SystemExit("Aggregate outputs differ from the committed Git blobs")
 
 
 def validate_bundle() -> None:
