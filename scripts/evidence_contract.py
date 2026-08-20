@@ -7,9 +7,7 @@ SUBMITTED_PDF_SHA256 = (
     "0ac5309d060cda53d82a05cc837136fe853e7f9dcbabd2f4fb4b4282a39bc97e"
 )
 SUBMITTED_DOCUMENT_FILE_COUNT = 40
-SUBMITTED_DOCUMENT_TREE_SHA256 = (
-    "ed356faa01680e22a848ba05128c58e1ee864b40884b250c7944b477f851c0ff"
-)
+SUBMITTED_DOCUMENT_GIT_TREE = "f104db730eb1c8d228d913fde6545599da7795d5"
 LOCAL_TEST_LOADER_PATH = (
     "data/TR-C_Benchmarks/point_net_transf_gat_8th_trial_lower_dropout/"
     "data_created_during_training/test_dl.pt"

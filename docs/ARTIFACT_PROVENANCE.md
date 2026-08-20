@@ -20,7 +20,7 @@ repository identify historical provenance, not an alternative canonical release.
 | Git blob | `1cb3bfdfb5d3126d8dc3cec361ab63f95de38306` |
 | Size | 674,395 bytes |
 | Submission date | May 15, 2026 |
-| `document/` tree | 40 files; SHA-256 `ed356faa01680e22a848ba05128c58e1ee864b40884b250c7944b477f851c0ff` |
+| `document/` tree | 40 files; Git tree `f104db730eb1c8d228d913fde6545599da7795d5` |
 
 The same PDF blob exists at the audited source's pre-audit commit `c3c8449`. A later regenerated
 PDF in the audit branch has a different blob and is intentionally not migrated. The canonical PDF

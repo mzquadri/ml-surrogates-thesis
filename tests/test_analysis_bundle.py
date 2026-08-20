@@ -1,5 +1,6 @@
 import hashlib
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -10,7 +11,7 @@ from scripts.evidence_contract import (
     LOCAL_TEST_LOADER_SHA256,
     SOURCE_ARTIFACTS,
     SUBMITTED_DOCUMENT_FILE_COUNT,
-    SUBMITTED_DOCUMENT_TREE_SHA256,
+    SUBMITTED_DOCUMENT_GIT_TREE,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -18,16 +19,17 @@ BUNDLE_PATH = ROOT / "analysis_outputs" / "thesis_intelligence.json"
 SUBMITTED_PDF = ROOT / "document" / "main.pdf"
 
 
-def document_tree_sha256() -> tuple[int, str]:
+def document_tree_contract() -> tuple[int, str]:
     root = ROOT / "document"
     files = sorted(path for path in root.rglob("*") if path.is_file())
-    digest = hashlib.sha256()
-    for path in files:
-        digest.update(path.relative_to(root).as_posix().encode())
-        digest.update(b"\0")
-        digest.update(hashlib.sha256(path.read_bytes()).hexdigest().encode())
-        digest.update(b"\n")
-    return len(files), digest.hexdigest()
+    tree = subprocess.run(
+        ["git", "rev-parse", "HEAD:document"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    return len(files), tree
 
 
 def test_generated_bundle_is_aggregate_and_path_safe() -> None:
@@ -67,9 +69,9 @@ def test_bundle_and_submitted_pdf_provenance_is_locked() -> None:
     assert hashlib.sha256(SUBMITTED_PDF.read_bytes()).hexdigest() == (
         bundle["source_provenance"]["submitted_pdf_sha256"]
     )
-    assert document_tree_sha256() == (
+    assert document_tree_contract() == (
         SUBMITTED_DOCUMENT_FILE_COUNT,
-        SUBMITTED_DOCUMENT_TREE_SHA256,
+        SUBMITTED_DOCUMENT_GIT_TREE,
     )
 
 

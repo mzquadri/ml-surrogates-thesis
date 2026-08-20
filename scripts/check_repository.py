@@ -15,7 +15,7 @@ from evidence_contract import (
     SOURCE_ARTIFACTS,
     SUBMITTED_ARTIFACT_COMMIT,
     SUBMITTED_DOCUMENT_FILE_COUNT,
-    SUBMITTED_DOCUMENT_TREE_SHA256,
+    SUBMITTED_DOCUMENT_GIT_TREE,
     SUBMITTED_PDF_BYTES,
     SUBMITTED_PDF_SHA256,
 )
@@ -110,14 +110,22 @@ def validate_submitted_document_tree() -> None:
     if len(files) != SUBMITTED_DOCUMENT_FILE_COUNT:
         raise SystemExit("Submitted document tree file count changed")
 
-    digest = hashlib.sha256()
-    for path in files:
-        digest.update(path.relative_to(document_root).as_posix().encode())
-        digest.update(b"\0")
-        digest.update(sha256(path).encode())
-        digest.update(b"\n")
-    if digest.hexdigest() != SUBMITTED_DOCUMENT_TREE_SHA256:
-        raise SystemExit("Submitted document tree hash changed")
+    current_tree = subprocess.run(
+        ["git", "rev-parse", "HEAD:document"],
+        cwd=REPO,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    baseline_tree = subprocess.run(
+        ["git", "rev-parse", f"{SUBMITTED_ARTIFACT_COMMIT}:document"],
+        cwd=REPO,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    if current_tree != SUBMITTED_DOCUMENT_GIT_TREE or baseline_tree != current_tree:
+        raise SystemExit("Submitted document Git tree changed")
 
     baseline = subprocess.run(
         ["git", "diff", "--quiet", SUBMITTED_ARTIFACT_COMMIT, "--", "document"],
